@@ -1,4 +1,5 @@
-/* Copyright (c) 2008 Travis Geiselbrecht
+/*
+ * Copyright (c) 2015 Travis Geiselbrecht
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -19,44 +20,33 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#pragma once
 
-/* some cruft we have to define when using the linux toolchain */
-#include <unwind.h>
+#include <sys/types.h>
+#include "transport.hpp"
+#include "mux.hpp"
 
-void *__dso_handle;
+namespace mocom {
 
-#if defined(__ARM_EABI_UNWINDER__) && __ARM_EABI_UNWINDER__
+class mocom_app {
+public:
+    mocom_app(transport &);
+    ~mocom_app();
 
-/* Our toolchain has eabi functionality built in, but they're not really used.
- * so we stub them out here. */
-_Unwind_Reason_Code __aeabi_unwind_cpp_pr0(_Unwind_State state, _Unwind_Control_Block *ucbp, _Unwind_Context *context)
-{
-    return _URC_FAILURE;
+    status_t init();
+
+    status_t worker();
+
+private:
+    // transport
+    transport &m_transport;
+
+    // mux layer
+    mux m_mux;
+
+    // no copy
+    mocom_app(const mocom_app &);
+    mocom_app& operator=(const mocom_app &);
+};
+
 }
-
-_Unwind_Reason_Code __aeabi_unwind_cpp_pr1(_Unwind_State state, _Unwind_Control_Block *ucbp, _Unwind_Context *context)
-{
-    return _URC_FAILURE;
-}
-
-_Unwind_Reason_Code __aeabi_unwind_cpp_pr2(_Unwind_State state, _Unwind_Control_Block *ucbp, _Unwind_Context *context)
-{
-    return _URC_FAILURE;
-}
-
-#endif
-
-/* needed by some piece of EABI */
-void raise(void)
-{
-}
-
-extern int __cxa_atexit(void (*func)(void *), void *arg, void *d);
-
-int __aeabi_atexit(void *arg, void (*func)(void *), void *d)
-{
-    return __cxa_atexit(func, arg, d);
-}
-
-
-

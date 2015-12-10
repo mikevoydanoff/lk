@@ -1,4 +1,5 @@
-/* Copyright (c) 2008 Travis Geiselbrecht
+/*
+ * Copyright (c) 2015 Travis Geiselbrecht
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files
@@ -19,44 +20,43 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#pragma once
 
-/* some cruft we have to define when using the linux toolchain */
-#include <unwind.h>
+#include <stdint.h>
+#include <sys/types.h>
+#include <list.h>
 
-void *__dso_handle;
+namespace mocom {
 
-#if defined(__ARM_EABI_UNWINDER__) && __ARM_EABI_UNWINDER__
+class transport;
+class channel;
 
-/* Our toolchain has eabi functionality built in, but they're not really used.
- * so we stub them out here. */
-_Unwind_Reason_Code __aeabi_unwind_cpp_pr0(_Unwind_State state, _Unwind_Control_Block *ucbp, _Unwind_Context *context)
-{
-    return _URC_FAILURE;
-}
+class mux {
+public:
+    mux(transport &transport) : m_transport(transport) {}
+    ~mux() {}
 
-_Unwind_Reason_Code __aeabi_unwind_cpp_pr1(_Unwind_State state, _Unwind_Control_Block *ucbp, _Unwind_Context *context)
-{
-    return _URC_FAILURE;
-}
+    // no copy
+    mux(const mux &) = delete;
+    mux& operator=(const mux &) = delete;
 
-_Unwind_Reason_Code __aeabi_unwind_cpp_pr2(_Unwind_State state, _Unwind_Control_Block *ucbp, _Unwind_Context *context)
-{
-    return _URC_FAILURE;
-}
+    void init();
+    void set_online(bool online);
+    void process_rx_packet(const uint8_t *buf, size_t len);
+    ssize_t prepare_tx_packet(uint8_t *buf, size_t len);
 
-#endif
+private:
+    // handle to transport
+    transport &m_transport;
 
-/* needed by some piece of EABI */
-void raise(void)
-{
-}
+    channel *find_channel(uint32_t num);
+    bool add_channel(channel *c);
+    void remove_channel(channel *c);
 
-extern int __cxa_atexit(void (*func)(void *), void *arg, void *d);
+    struct list_node m_channel_list = LIST_INITIAL_VALUE(m_channel_list);
 
-int __aeabi_atexit(void *arg, void (*func)(void *), void *d)
-{
-    return __cxa_atexit(func, arg, d);
-}
+    friend class control_channel;
+};
 
-
+} // namespace mocom
 
