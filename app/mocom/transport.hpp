@@ -22,18 +22,20 @@
  */
 #pragma once
 
+#include <lib/cpputils/nocopy.hpp>
+
 namespace mocom {
 
 class mux;
 
-class transport {
+class transport : lk::nocopy {
 public:
     transport() {}
     virtual ~transport() {}
 
     // virtual api
     virtual status_t init() = 0;
-    virtual status_t do_work() = 0;
+    virtual lk_time_t do_work() = 0;
 
     void set_mux(mux *m) { m_mux = m; }
 

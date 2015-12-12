@@ -24,36 +24,52 @@
 
 #include <stdint.h>
 #include <sys/types.h>
-#include <list.h>
+#include <debug.h>
+#include <lib/cbuf.h>
 #include <lib/cpputils/nocopy.hpp>
 
+#include "handler.hpp"
+#include "../mocom_app.hpp"
+
 namespace mocom {
+namespace cmd_handler {
 
-class transport;
-class channel;
-
-class mux : lk::nocopy {
+class console : public handler {
 public:
-    mux(transport &transport) : m_transport(transport) {}
-    ~mux() {}
+    console(command_channel &c);
+    virtual ~console();
 
-    void init();
-    void set_online(bool online);
-    void process_rx_packet(const uint8_t *buf, size_t len);
-    ssize_t prepare_tx_packet(uint8_t *buf, size_t len);
+    virtual status_t Init() override;
+    virtual void process_rx_packet(const uint8_t *buf, size_t len) override;
+    virtual void tx_complete() override;
 
 private:
-    // handle to transport
-    transport &m_transport;
+    // main worker callback
+    lk_time_t work();
+    static lk_time_t _work(void *context) { return ((console *)context)->work(); }
 
-    channel *find_channel(uint32_t num);
-    bool add_channel(channel *c);
-    void remove_channel(channel *c);
+    mocom_app::worker_callback m_worker;
 
-    struct list_node m_channel_list = LIST_INITIAL_VALUE(m_channel_list);
+    // debug console callback
+    void debug_console_callback(print_callback_t *cb, const char *str, size_t len);
+    static void _debug_console_callback(print_callback_t *cb, const char *str, size_t len) {
+        ((console *)cb->context)->debug_console_callback(cb, str, len);
+    }
 
-    friend class control_channel;
+    bool m_registered = false;
+    print_callback_t m_cb;
+
+    // circular buffer to hold outgoing print data
+    cbuf_t m_outbuf;
+    static const size_t OUTBUF_LEN = 1024;
+    char   m_outbuf_buf[OUTBUF_LEN];
+
+    // state of tx
+
 };
 
-} // namespace mocom
+
+}
+}
+
 

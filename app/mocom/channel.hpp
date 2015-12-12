@@ -25,19 +25,16 @@
 #include <stdint.h>
 #include <sys/types.h>
 #include <list.h>
+#include <lib/cpputils/nocopy.hpp>
 
 namespace mocom {
 
 class mux;
 
-class channel {
+class channel : lk::nocopy {
 public:
     channel(mux &m, uint32_t num) : m_mux(m), m_num(num) {}
     virtual ~channel() {}
-
-    // nocopy
-    channel(const channel &) = delete;
-    channel& operator=(const channel &) = delete;
 
     virtual void process_rx_packet(const uint8_t *buf, size_t len) = 0;
     virtual status_t close();
@@ -76,20 +73,27 @@ public:
     virtual void process_rx_packet(const uint8_t *buf, size_t len) override;
 };
 
+namespace cmd_handler {
+class handler;
+}
+
 class command_channel : public channel {
 public:
     command_channel(mux &m, uint32_t num) : channel(m, num) {}
-    virtual ~command_channel() {}
+    virtual ~command_channel();
 
     virtual void process_rx_packet(const uint8_t *buf, size_t len) override;
-    virtual status_t queue_tx(const void *buf, size_t len);
     virtual void tx_complete() override;
+    virtual status_t close() override;
 
 private:
     enum {
         STATE_INITIAL,
         STATE_ESTABLISHED
     } m_state = STATE_INITIAL;
+
+    // specialized handler to handle the command
+    cmd_handler::handler *m_handler = nullptr;
 };
 
 } // namespace mocom

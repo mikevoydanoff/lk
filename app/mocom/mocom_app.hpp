@@ -22,13 +22,16 @@
  */
 #pragma once
 
+#include <list.h>
 #include <sys/types.h>
+#include <kernel/event.h>
+#include <lib/cpputils/nocopy.hpp>
 #include "transport.hpp"
 #include "mux.hpp"
 
 namespace mocom {
 
-class mocom_app {
+class mocom_app : lk::nocopy {
 public:
     mocom_app(transport &);
     ~mocom_app();
@@ -37,6 +40,19 @@ public:
 
     status_t worker();
 
+    // allow registering a worker routine to be run in the main thread context
+    struct worker_callback {
+        struct list_node node;
+        void *context;
+        lk_time_t (*work)(void *context);
+    };
+    void register_worker(worker_callback &cb);
+    void unregister_worker(worker_callback &cb);
+
+    // signal that the workers should cycle through
+    void signal() { event_signal(&m_event, true); }
+    void signal_irq() { event_signal(&m_event, false); }
+
 private:
     // transport
     transport &m_transport;
@@ -44,9 +60,13 @@ private:
     // mux layer
     mux m_mux;
 
-    // no copy
-    mocom_app(const mocom_app &);
-    mocom_app& operator=(const mocom_app &);
+    // main app event
+    event_t m_event;
+
+    struct list_node m_workers = LIST_INITIAL_VALUE(m_workers);
 };
+
+// the singleton app
+extern mocom_app *the_app;
 
 }

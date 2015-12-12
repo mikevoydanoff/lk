@@ -26,6 +26,7 @@
 #include <dev/usb.h>
 #include <kernel/spinlock.h>
 #include "transport.hpp"
+#include <lib/cpputils/nocopy.hpp>
 
 namespace mocom {
 
@@ -35,7 +36,7 @@ public:
     virtual ~usb_transport();
 
     virtual status_t init() override;
-    virtual status_t do_work() override;
+    virtual lk_time_t do_work() override;
 
 private:
     // in/out endpoints

@@ -40,8 +40,10 @@
 #include <app/mocom/usb.h>
 
 #include "mux.hpp"
+#include "mocom_app.hpp"
 
-#define LOCAL_TRACE 1
+#define LOCAL_TRACE 0
+#define TRACE_PACKETS 0
 
 namespace mocom {
 
@@ -124,7 +126,6 @@ status_t usb_transport::usb_cb(usb_callback_op_t op, const union usb_callback_ar
     return NO_ERROR;
 }
 
-
 status_t usb_transport::ep_cb_rx(ep_t endpoint, usbc_transfer_t *t)
 {
 #if 0 && LOCAL_TRACE
@@ -138,12 +139,16 @@ status_t usb_transport::ep_cb_rx(ep_t endpoint, usbc_transfer_t *t)
 
     m_rx_transfer_queued = false;
 
+    the_app->signal_irq();
+
     return NO_ERROR;
 }
 
 status_t usb_transport::ep_cb_tx(ep_t endpoint, usbc_transfer_t *t)
 {
     m_tx_transfer_queued = false;
+
+    the_app->signal_irq();
 
     return NO_ERROR;
 }
@@ -204,6 +209,9 @@ bool usb_transport::prepare_tx_packet()
             if (len > 0) {
                 header->command = usbll_data;
                 m_tx_transfer.buflen = sizeof(struct usbll_header) + len;
+                // make sure we're not an even multiple of a usb packet size
+                if ((m_tx_transfer.buflen % 64) == 0)
+                    m_tx_transfer.buflen++;
                 DEBUG_ASSERT(m_tx_transfer.buflen <= USB_TRANSFER_LEN);
                 return true;
             }
@@ -234,7 +242,9 @@ bool usb_transport::handle_rx_packet(const uint8_t *buf, size_t len)
         return false;
 
     LTRACEF("state %u, command %u\n", m_state, header->command);
+#if TRACE_PACKETS
     usbll_dump_packet(buf, len, false);
+#endif
 
     switch (m_state) {
         case STATE_LISTEN:
@@ -265,14 +275,14 @@ bool usb_transport::handle_rx_packet(const uint8_t *buf, size_t len)
     return true;
 }
 
-
-status_t usb_transport::do_work()
+lk_time_t usb_transport::do_work()
 {
+    LTRACE_ENTRY;
+
     // if we're offline, nothing to do
     if (m_online == false) {
         // nothing to do
-        thread_sleep(1000); // XXX should move up level
-        return NO_ERROR;
+        return 1000; // tell the main app to try again in 1000ms
     }
 
     // see if we're not receiving for some reason
@@ -304,13 +314,15 @@ status_t usb_transport::do_work()
             m_tx_transfer_queued = true;
             m_last_tx_time = current_time();
 
+#if TRACE_PACKETS
             usbll_dump_packet(m_tx_buffer, m_tx_transfer.buflen, true);
+#endif
 
             usbc_queue_tx(m_inep, &m_tx_transfer);
         }
     }
 
-    return NO_ERROR;
+    return INFINITE_TIME;
 }
 
 status_t usb_transport::init()

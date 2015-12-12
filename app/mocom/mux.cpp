@@ -38,7 +38,8 @@
 
 #include "channel.hpp"
 
-#define LOCAL_TRACE 1
+#define LOCAL_TRACE 0
+#define TRACE_PACKETS 0
 
 namespace mocom {
 
@@ -141,7 +142,9 @@ void mux::process_rx_packet(const uint8_t *buf, size_t len)
     if (header->version != PMUX_VERSION)
         return;
 
+#if TRACE_PACKETS
     dump_packet(buf, len, PMUX_RX);
+#endif
 
     channel *c = find_channel(header->channel);
     if (c) {
@@ -197,7 +200,9 @@ ssize_t mux::prepare_tx_packet(uint8_t *buf, size_t len)
             header->payload_len = 0;
             header->total_len = sizeof(struct pmux_header);
 
+#if TRACE_PACKETS
             dump_packet(buf, header->total_len, true);
+#endif
 
             LTRACEF("acking channel %u\n", c->get_num());
             return header->total_len;
@@ -228,7 +233,9 @@ ssize_t mux::prepare_tx_packet(uint8_t *buf, size_t len)
             // XXX for now can only consume the entire queued tx len
             DEBUG_ASSERT(data_len == c->m_tx_len);
 
+#if TRACE_PACKETS
             dump_packet(buf, header->total_len, true);
+#endif
 
             LTRACEF("sending %u bytes on channel %u\n", header->payload_len, c->get_num());
             return header->total_len;

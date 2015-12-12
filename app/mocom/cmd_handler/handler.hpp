@@ -27,33 +27,31 @@
 #include <list.h>
 #include <lib/cpputils/nocopy.hpp>
 
+#include "../channel.hpp"
+
 namespace mocom {
+namespace cmd_handler {
 
-class transport;
-class channel;
-
-class mux : lk::nocopy {
+class handler : lk::nocopy {
 public:
-    mux(transport &transport) : m_transport(transport) {}
-    ~mux() {}
+    handler(command_channel &c);
+    virtual ~handler();
 
-    void init();
-    void set_online(bool online);
-    void process_rx_packet(const uint8_t *buf, size_t len);
-    ssize_t prepare_tx_packet(uint8_t *buf, size_t len);
+    virtual status_t Init() = 0;
+    virtual void process_rx_packet(const uint8_t *buf, size_t len) = 0;
+    virtual void close();
+    virtual void tx_complete();
 
-private:
-    // handle to transport
-    transport &m_transport;
+    status_t send_stdout_data(const char *buf, size_t len);
 
-    channel *find_channel(uint32_t num);
-    bool add_channel(channel *c);
-    void remove_channel(channel *c);
+    bool is_tx_pending() const { return m_outbuf; }
 
-    struct list_node m_channel_list = LIST_INITIAL_VALUE(m_channel_list);
+protected:
+    command_channel &m_cc;
 
-    friend class control_channel;
+    char *m_outbuf = nullptr;
 };
 
-} // namespace mocom
+}
+}
 
