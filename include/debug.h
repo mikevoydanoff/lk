@@ -45,6 +45,7 @@ __BEGIN_CDECLS
 typedef struct __print_callback print_callback_t;
 struct __print_callback {
     struct list_node entry;
+    void *context;
     void (*print)(print_callback_t *cb, const char *str, size_t len);
 };
 
