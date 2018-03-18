@@ -4,6 +4,9 @@
 
 #pragma once
 
+#include <compiler.h>
+#include <sys/types.h>
+
 // Transfer Request Block
 typedef volatile struct {
     uint32_t ptr_low;

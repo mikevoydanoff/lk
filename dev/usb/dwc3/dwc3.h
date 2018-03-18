@@ -4,19 +4,17 @@
 
 #pragma once
 
-#include <ddk/device.h>
-#include <ddk/io-buffer.h>
-#include <ddk/protocol/platform-device.h>
-#include <ddk/protocol/usb-dci.h>
-#include <ddk/protocol/usb-mode-switch.h>
-#include <zircon/device/usb-device.h>
-#include <zircon/listnode.h>
-#include <zircon/types.h>
-#include <zircon/hw/usb.h>
-
-#include <threads.h>
+#include <list.h>
+#include <hw/usb.h>
+#include <kernel/mutex.h>
 
 #include "dwc3-types.h"
+
+typedef struct list_node list_node_t;
+typedef struct usb_setup usb_setup_t;
+
+typedef status_t zx_status_t;
+typedef unsigned usb_speed_t;
 
 // physical endpoint numbers for ep0
 #define EP0_OUT             0
@@ -61,7 +59,7 @@ typedef struct {
     // and ep specific hardware registers
     // This should be acquired before dwc3_t.lock
     // if acquiring both locks.
-    mtx_t lock;
+    mutex_t lock;
 
     uint16_t max_packet_size;
     uint8_t ep_num;
@@ -75,6 +73,7 @@ typedef struct {
 } dwc3_endpoint_t;
 
 typedef struct {
+/*
     zx_device_t* zxdev;
     zx_device_t* xhci_dev;
     zx_device_t* parent;
@@ -90,6 +89,7 @@ typedef struct {
     pdev_vmo_buffer_t event_buffer;
     zx_handle_t irq_handle;
     thrd_t irq_thread;
+*/
 
     dwc3_endpoint_t eps[DWC3_MAX_EPS];
 
@@ -98,14 +98,14 @@ typedef struct {
 
     // ep0 stuff
     usb_setup_t cur_setup;      // current setup request
-    pdev_vmo_buffer_t ep0_buffer;
+//    pdev_vmo_buffer_t ep0_buffer;
     dwc3_ep0_state ep0_state;
 
     // Used for synchronizing global state
     // and non ep specific hardware registers.
     // dwc3_endpoint_t.lock should be acquired first
     // if acquiring both locks.
-    mtx_t lock;
+    mutex_t lock;
     bool configured;
 } dwc3_t;
 

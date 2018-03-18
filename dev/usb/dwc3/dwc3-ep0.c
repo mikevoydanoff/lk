@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <ddk/debug.h>
-
 #include "dwc3.h"
 #include "dwc3-regs.h"
 #include "dwc3-types.h"
@@ -23,7 +21,7 @@ static void dwc3_queue_setup_locked(dwc3_t* dwc) {
 zx_status_t dwc3_ep0_init(dwc3_t* dwc) {
     // fifo only needed for physical endpoint 0
     zx_status_t status = dwc3_ep_fifo_init(dwc, EP0_OUT);
-    if (status != ZX_OK) {
+    if (status != NO_ERROR) {
         return status;
     }
 
@@ -35,7 +33,7 @@ zx_status_t dwc3_ep0_init(dwc3_t* dwc) {
         ep->interval = 0;
     }
 
-    return ZX_OK;
+    return NO_ERROR;
 }
 
 void dwc3_ep0_reset(dwc3_t* dwc) {
@@ -66,13 +64,13 @@ static zx_status_t dwc3_handle_setup(dwc3_t* dwc, usb_setup_t* setup, void* buff
             zxlogf(TRACE, "SET_ADDRESS %d\n", setup->wValue);
             dwc3_set_address(dwc, setup->wValue);
             *out_actual = 0;
-            return ZX_OK;
+            return NO_ERROR;
         case USB_REQ_SET_CONFIGURATION:
             zxlogf(TRACE, "SET_CONFIGURATION %d\n", setup->wValue);
             dwc3_reset_configuration(dwc);
             dwc->configured = false;
             status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
-            if (status == ZX_OK && setup->wValue) {
+            if (status == NO_ERROR && setup->wValue) {
                 dwc->configured = true;
                 dwc3_start_eps(dwc);
             }
@@ -87,7 +85,7 @@ static zx_status_t dwc3_handle_setup(dwc3_t* dwc, usb_setup_t* setup, void* buff
         dwc3_reset_configuration(dwc);
         dwc->configured = false;
         status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
-        if (status == ZX_OK) {
+        if (status == NO_ERROR) {
             dwc->configured = true;
             dwc3_start_eps(dwc);
         }
@@ -177,7 +175,7 @@ void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
             zx_status_t status = dwc3_handle_setup(dwc, setup, dwc->ep0_buffer.vaddr,
                                                    dwc->ep0_buffer.size, &actual);
             zxlogf(TRACE, "dwc3_handle_setup returned %d actual %zu\n", status, actual);
-            if (status != ZX_OK) {
+            if (status != NO_ERROR) {
                 dwc3_cmd_ep_set_stall(dwc, EP0_OUT);
                 dwc3_queue_setup_locked(dwc);
                 break;

@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <ddk/debug.h>
-#include <hw/arch_ops.h>
-
 #include "dwc3.h"
 #include "dwc3-regs.h"
 
@@ -187,7 +184,7 @@ static int dwc3_irq_thread(void* arg) {
     while (1) {
         uint64_t slots;
         zx_status_t status = zx_interrupt_wait(dwc->irq_handle, &slots);
-        if (status != ZX_OK) {
+        if (status != NO_ERROR) {
             zxlogf(ERROR, "dwc3_irq_thread: zx_interrupt_wait returned %d\n", status);
             break;
         }

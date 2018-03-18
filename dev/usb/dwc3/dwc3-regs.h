@@ -6,7 +6,7 @@
 
 // clang-format off
 
-#include <hw/reg.h>
+#include <reg.h>
 
 #define DWC3_READ32(a)      readl(a)
 #define DWC3_WRITE32(a, v)  writel(v, a)
