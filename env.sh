@@ -1,0 +1,1 @@
+export ARCH_arm64_TOOLCHAIN_PREFIX=../zircon/prebuilt/downloads/gcc/bin/aarch64-elf-

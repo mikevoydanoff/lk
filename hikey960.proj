@@ -1,0 +1,5 @@
+#@!?- Zoinks Project File
+ExternalDebuggerCommand=
+MakeBeforeDebug=true
+MakeCommand=make -j32 hikey960-test
+MakePath=./
