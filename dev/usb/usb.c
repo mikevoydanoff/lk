@@ -231,29 +231,29 @@ status_t usbc_callback(usb_callback_op_t op, const union usb_callback_args *args
         const struct usb_setup *setup = args->setup;
         DEBUG_ASSERT(setup);
         LTRACEF("SETUP: req_type=%#x req=%#x value=%#x index=%#x len=%#x\n",
-                setup->request_type, setup->request, setup->value, setup->index, setup->length);
+                setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex, setup->wLength);
 
-        if ((setup->request_type & TYPE_MASK) == TYPE_STANDARD) {
-            switch (setup->request) {
-                case SET_ADDRESS:
-                    LTRACEF("SET_ADDRESS 0x%x\n", setup->value);
+        if ((setup->bmRequestType & USB_TYPE_MASK) == USB_TYPE_STANDARD) {
+            switch (setup->bRequest) {
+                case USB_REQ_SET_ADDRESS:
+                    LTRACEF("USB_REQ_SET_ADDRESS 0x%x\n", setup->wValue);
                     usbc_ep0_ack();
-                    usbc_set_address(setup->value);
+                    usbc_set_address(setup->wValue);
                     setup_handled = true;
                     break;
-                case SET_FEATURE:
-                case CLEAR_FEATURE:
-                    LTRACEF("SET/CLEAR_FEATURE, feature 0x%x\n", setup->value);
+                case USB_REQ_SET_FEATURE:
+                case USB_REQ_CLEAR_FEATURE:
+                    LTRACEF("SET/CLEAR_FEATURE, feature 0x%x\n", setup->wValue);
                     usbc_ep0_ack();
                     setup_handled = true;
                     break;
-                case SET_DESCRIPTOR:
-                    LTRACEF("SET_DESCRIPTOR\n");
+                case USB_REQ_SET_DESCRIPTOR:
+                    LTRACEF("USB_REQ_SET_DESCRIPTOR\n");
                     usbc_ep0_stall();
                     setup_handled = true;
                     break;
-                case GET_DESCRIPTOR: {
-                    if ((setup->request_type & RECIP_MASK) == RECIP_DEVICE) {
+                case USB_REQ_GET_DESCRIPTOR: {
+                    if ((setup->bmRequestType & USB_RECIP_MASK) == USB_RECIP_DEVICE) {
                         /* handle device descriptor fetches */
 
                         /* Get the right descriptors based on current speed */
@@ -264,32 +264,32 @@ status_t usbc_callback(usb_callback_op_t op, const union usb_callback_args *args
                             speed = &usb.config->lowspeed;
                         }
 
-                        switch (setup->value) {
+                        switch (setup->wValue) {
                             case 0x100: /* device */
                                 LTRACEF("got GET_DESCRIPTOR, device descriptor\n");
                                 usbc_ep0_send(speed->device.desc, speed->device.len,
-                                              setup->length);
+                                              setup->wLength);
                                 break;
                             case 0x200:    /* CONFIGURATION */
                                 LTRACEF("got GET_DESCRIPTOR, config descriptor\n");
                                 usbc_ep0_send(speed->config.desc, speed->config.len,
-                                              setup->length);
+                                              setup->wLength);
                                 break;
                             case 0x300:    /* Language ID */
                                 LTRACEF("got GET_DESCRIPTOR, language id\n");
                                 usbc_ep0_send(usb.config->langid.desc,
-                                              usb.config->langid.len, setup->length);
+                                              usb.config->langid.len, setup->wLength);
                                 break;
                             case (0x301)...(0x3ff): {
                                 /* string descriptor, search our list for a match */
                                 uint i;
                                 bool found = false;
-                                uint8_t id = setup->value & 0xff;
+                                uint8_t id = setup->wValue & 0xff;
                                 for (i = 0; i < MAX_STRINGS; i++) {
                                     if (usb.strings[i].id == id) {
                                         usbc_ep0_send(usb.strings[i].string.desc,
                                                       usb.strings[i].string.len,
-                                                      setup->length);
+                                                      setup->wLength);
                                         found = true;
                                         break;
                                     }
@@ -303,7 +303,7 @@ status_t usbc_callback(usb_callback_op_t op, const union usb_callback_args *args
                             case 0x600:    /* DEVICE QUALIFIER */
                                 LTRACEF("got GET_DESCRIPTOR, device qualifier\n");
                                 usbc_ep0_send(speed->device_qual.desc,
-                                              speed->device_qual.len, setup->length);
+                                              speed->device_qual.len, setup->wLength);
                                 break;
                             case 0xa00:
                                 /* we aint got one of these */
@@ -311,7 +311,7 @@ status_t usbc_callback(usb_callback_op_t op, const union usb_callback_args *args
                                 usbc_ep0_stall();
                                 break;
                             default:
-                                LTRACEF("unhandled descriptor %#x\n", setup->value);
+                                LTRACEF("unhandled descriptor %#x\n", setup->wValue);
                                 // stall
                                 break;
                         }
@@ -320,37 +320,37 @@ status_t usbc_callback(usb_callback_op_t op, const union usb_callback_args *args
                     break;
                 }
 
-                case SET_CONFIGURATION:
-                    LTRACEF("SET_CONFIGURATION %d\n", setup->value);
+                case USB_REQ_SET_CONFIGURATION:
+                    LTRACEF("USB_REQ_SET_CONFIGURATION %d\n", setup->wValue);
                     usbc_ep0_ack();
-                    usb_set_active_config(setup->value);
+                    usb_set_active_config(setup->wValue);
                     break;
 
-                case GET_CONFIGURATION:
-                    LTRACEF("GET_CONFIGURATION\n");
-                    usbc_ep0_send(&usb.active_config, 1, setup->length);
+                case USB_REQ_GET_CONFIGURATION:
+                    LTRACEF("USB_REQ_GET_CONFIGURATION\n");
+                    usbc_ep0_send(&usb.active_config, 1, setup->wLength);
                     break;
 
-                case SET_INTERFACE:
-                    LTRACEF("SET_INTERFACE %d\n", setup->value);
+                case USB_REQ_SET_INTERFACE:
+                    LTRACEF("USB_REQ_SET_INTERFACE %d\n", setup->wValue);
                     usbc_ep0_ack();
                     break;
 
-                case GET_INTERFACE: {
+                case USB_REQ_GET_INTERFACE: {
                     static uint8_t i = 1;
-                    LTRACEF("GET_INTERFACE\n");
-                    usbc_ep0_send(&i, 1, setup->length);
+                    LTRACEF("USB_REQ_GET_INTERFACE\n");
+                    usbc_ep0_send(&i, 1, setup->wLength);
                     break;
                 }
 
-                case GET_STATUS: {
+                case USB_REQ_GET_STATUS: {
                     static uint16_t i = 1; // self powered
-                    LTRACEF("GET_STATUS\n");
-                    usbc_ep0_send(&i, 2, setup->length);
+                    LTRACEF("USB_REQ_GET_STATUS\n");
+                    usbc_ep0_send(&i, 2, setup->wLength);
                     break;
                 }
                 default:
-                    LTRACEF("unhandled standard request 0x%x\n", setup->request);
+                    LTRACEF("unhandled standard request 0x%x\n", setup->bRequest);
             }
         }
 

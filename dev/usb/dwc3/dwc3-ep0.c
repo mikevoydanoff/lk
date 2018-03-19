@@ -6,21 +6,23 @@
 #include "dwc3-regs.h"
 #include "dwc3-types.h"
 
+#include <err.h>
 #include <stdio.h>
 #include <string.h>
+#include <dev/usb.h>
 
 #define EP0_LOCK(dwc)   (&(dwc)->eps[EP0_OUT].lock)
 
 static void dwc3_queue_setup_locked(dwc3_t* dwc) {
-    pdev_vmo_buffer_cache_flush_invalidate(&dwc->ep0_buffer, 0, sizeof(usb_setup_t));
+    arch_clean_invalidate_cache_range(dwc->ep0_buffer.vaddr, sizeof(usb_setup_t));
     dwc3_ep_start_transfer(dwc, EP0_OUT, TRB_TRBCTL_SETUP, dwc->ep0_buffer.paddr,
                            sizeof(usb_setup_t));
     dwc->ep0_state = EP0_STATE_SETUP;
 }
 
-zx_status_t dwc3_ep0_init(dwc3_t* dwc) {
+status_t dwc3_ep0_init(dwc3_t* dwc) {
     // fifo only needed for physical endpoint 0
-    zx_status_t status = dwc3_ep_fifo_init(dwc, EP0_OUT);
+    status_t status = dwc3_ep_fifo_init(dwc, EP0_OUT);
     if (status != NO_ERROR) {
         return status;
     }
@@ -37,66 +39,78 @@ zx_status_t dwc3_ep0_init(dwc3_t* dwc) {
 }
 
 void dwc3_ep0_reset(dwc3_t* dwc) {
-    mtx_lock(EP0_LOCK(dwc));
+    mutex_acquire(EP0_LOCK(dwc));
     dwc3_cmd_ep_end_transfer(dwc, EP0_OUT);
     dwc->ep0_state = EP0_STATE_NONE;
-    mtx_unlock(EP0_LOCK(dwc));
+    mutex_release(EP0_LOCK(dwc));
 }
 
 void dwc3_ep0_start(dwc3_t* dwc) {
-    mtx_lock(EP0_LOCK(dwc));
+    mutex_acquire(EP0_LOCK(dwc));
     dwc3_cmd_start_new_config(dwc, EP0_OUT, 0);
     dwc3_ep_set_config(dwc, EP0_OUT, true);
     dwc3_ep_set_config(dwc, EP0_IN, true);
 
     dwc3_queue_setup_locked(dwc);
-    mtx_unlock(EP0_LOCK(dwc));
+    mutex_release(EP0_LOCK(dwc));
 }
 
-static zx_status_t dwc3_handle_setup(dwc3_t* dwc, usb_setup_t* setup, void* buffer, size_t length,
+static status_t dwc3_handle_setup(dwc3_t* dwc, usb_setup_t* setup, void* buffer, size_t length,
                                      size_t* out_actual) {
-    zx_status_t status;
-
     if (setup->bmRequestType == (USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_DEVICE)) {
         // handle some special setup requests in this driver
         switch (setup->bRequest) {
         case USB_REQ_SET_ADDRESS:
-            zxlogf(TRACE, "SET_ADDRESS %d\n", setup->wValue);
+            dprintf(SPEW, "SET_ADDRESS %d\n", setup->wValue);
             dwc3_set_address(dwc, setup->wValue);
             *out_actual = 0;
             return NO_ERROR;
         case USB_REQ_SET_CONFIGURATION:
-            zxlogf(TRACE, "SET_CONFIGURATION %d\n", setup->wValue);
+            dprintf(SPEW, "SET_CONFIGURATION %d\n", setup->wValue);
             dwc3_reset_configuration(dwc);
             dwc->configured = false;
-            status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
-            if (status == NO_ERROR && setup->wValue) {
+ 
+            union usb_callback_args args;
+            args.setup = setup;
+            usbc_callback(USB_CB_SETUP_MSG, &args);
+
+//            status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
+//            if (status == NO_ERROR && setup->wValue) {
                 dwc->configured = true;
                 dwc3_start_eps(dwc);
-            }
-            return status;
+//            }
+            return NO_ERROR;
         default:
             // fall through to usb_dci_control()
             break;
         }
     } else if (setup->bmRequestType == (USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE) &&
                setup->bRequest == USB_REQ_SET_INTERFACE) {
-        zxlogf(TRACE, "SET_INTERFACE %d\n", setup->wValue);
+        dprintf(SPEW, "SET_INTERFACE %d\n", setup->wValue);
         dwc3_reset_configuration(dwc);
         dwc->configured = false;
-        status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
-        if (status == NO_ERROR) {
+
+        union usb_callback_args args;
+        args.setup = setup;
+        usbc_callback(USB_CB_SETUP_MSG, &args);
+
+//        status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
+//        if (status == NO_ERROR) {
             dwc->configured = true;
             dwc3_start_eps(dwc);
-        }
-        return status;
+//        }
+        return NO_ERROR;
     }
 
-    return usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
+    union usb_callback_args args;
+    args.setup = setup;
+    usbc_callback(USB_CB_SETUP_MSG, &args);
+    return NO_ERROR;
+//    return usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
 }
 
 void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
-    mtx_lock(EP0_LOCK(dwc));
+    mutex_acquire(EP0_LOCK(dwc));
 
     switch (dwc->ep0_state) {
     case EP0_STATE_SETUP:
@@ -144,23 +158,23 @@ void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
         }
         break;
     default:
-        zxlogf(ERROR, "dwc3_ep0_xfer_not_ready unhandled state %u\n", dwc->ep0_state);
+        dprintf(ALWAYS, "dwc3_ep0_xfer_not_ready unhandled state %u\n", dwc->ep0_state);
         break;
     }
 
-    mtx_unlock(EP0_LOCK(dwc));
+    mutex_release(EP0_LOCK(dwc));
 }
 
 void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
-    mtx_lock(EP0_LOCK(dwc));
+    mutex_acquire(EP0_LOCK(dwc));
 
     switch (dwc->ep0_state) {
     case EP0_STATE_SETUP: {
         usb_setup_t* setup = &dwc->cur_setup;
 
-        memcpy(setup, dwc->ep0_buffer.vaddr, sizeof(*setup));
+        memcpy(setup, (void *)dwc->ep0_buffer.vaddr, sizeof(*setup));
 
-        zxlogf(TRACE, "got setup: type: 0x%02X req: %d value: %d index: %d length: %d\n",
+        dprintf(SPEW, "got setup: type: 0x%02X req: %d value: %d index: %d length: %d\n",
                 setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex,
                 setup->wLength);
 
@@ -172,9 +186,9 @@ void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
             dwc->ep0_state = EP0_STATE_DATA_OUT;
         } else {
             size_t actual;
-            zx_status_t status = dwc3_handle_setup(dwc, setup, dwc->ep0_buffer.vaddr,
+            status_t status = dwc3_handle_setup(dwc, setup, (void *)dwc->ep0_buffer.vaddr,
                                                    dwc->ep0_buffer.size, &actual);
-            zxlogf(TRACE, "dwc3_handle_setup returned %d actual %zu\n", status, actual);
+            dprintf(SPEW, "dwc3_handle_setup returned %d actual %zu\n", status, actual);
             if (status != NO_ERROR) {
                 dwc3_cmd_ep_set_stall(dwc, EP0_OUT);
                 dwc3_queue_setup_locked(dwc);
@@ -183,7 +197,7 @@ void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
 
             if (setup->wLength > 0) {
                 // queue a write for the data phase
-                pdev_vmo_buffer_cache_flush(&dwc->ep0_buffer, 0, actual);
+                arch_clean_cache_range(dwc->ep0_buffer.vaddr, actual);
                 dwc3_ep_start_transfer(dwc, EP0_IN, TRB_TRBCTL_CONTROL_DATA, dwc->ep0_buffer.paddr,
                                        actual);
                 dwc->ep0_state = EP0_STATE_DATA_IN;
@@ -206,5 +220,5 @@ void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
         break;
     }
 
-    mtx_unlock(EP0_LOCK(dwc));
+    mutex_release(EP0_LOCK(dwc));
 }

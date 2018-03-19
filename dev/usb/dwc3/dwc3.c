@@ -2,11 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <err.h>
 #include <reg.h>
+#include <dev/usb.h>
+#include <dev/usbc.h>
+#include <kernel/vm.h>
+#include <lk/init.h>
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <platform/dwc3.h>
 
 #include "dwc3.h"
 #include "dwc3-regs.h"
@@ -22,10 +29,62 @@ enum {
     IRQ_USB3,
 };
 
+status_t io_buffer_init(io_buffer_t* buffer, size_t size) {
+    void* addr;
+    status_t status = vmm_alloc_contiguous(vmm_get_kernel_aspace(), "dwc3-buffer", size, &addr, 0, 0, ARCH_MMU_FLAG_CACHED);
+    if (status != NO_ERROR) {
+        return status;
+    }
+    buffer->vaddr = (vaddr_t)addr;
+    buffer->paddr = vaddr_to_paddr(addr);
+    buffer->size = size;
+    return NO_ERROR;
+}
+
+status_t io_buffer_init_physical(io_buffer_t* buffer, paddr_t paddr, size_t size) {
+    void* addr;
+    status_t status = vmm_alloc_physical(vmm_get_kernel_aspace(), "dwc3-regs", size, &addr, 0, paddr, 0, ARCH_MMU_FLAG_UNCACHED_DEVICE);
+    if (status != NO_ERROR) {
+        return status;
+    }
+    buffer->vaddr = (vaddr_t)addr;
+    buffer->paddr = vaddr_to_paddr(addr);
+    buffer->size = size;
+    return NO_ERROR;
+}
+
+status_t usbc_set_active(bool active) {
+    return NO_ERROR;
+}
+
+void usbc_set_address(uint8_t address) {
+printf("usbc_set_address %u\n", address);
+}
+
+void usbc_ep0_ack(void) {
+printf("usbc_ep0_ack\n");
+}
+
+void usbc_ep0_stall(void) {
+printf("usbc_ep0_stall\n");
+}
+
+void usbc_ep0_send(const void *buf, size_t len, size_t maxlen) {
+printf("usbc_ep0_send\n");
+}
+
+void usbc_ep0_recv(void *buf, size_t len, ep_callback cb) {
+printf("usbc_ep0_recv\n");
+}
+
+bool usbc_is_highspeed(void) {
+    return true;
+}
+
 void dwc3_wait_bits(volatile uint32_t* ptr, uint32_t bits, uint32_t expected) {
     uint32_t value = DWC3_READ32(ptr);
     while ((value & bits) != expected) {
-        usleep(1000);
+        thread_sleep(1);
         value = DWC3_READ32(ptr);
     }
 }
@@ -33,39 +92,39 @@ void dwc3_wait_bits(volatile uint32_t* ptr, uint32_t bits, uint32_t expected) {
 void dwc3_print_status(dwc3_t* dwc) {
     volatile void* mmio = dwc3_mmio(dwc);
     uint32_t status = DWC3_READ32(mmio + DSTS);
-    zxlogf(TRACE, "DSTS: ");
-    zxlogf(TRACE, "USBLNKST: %d ", DSTS_USBLNKST(status));
-    zxlogf(TRACE, "SOFFN: %d ", DSTS_SOFFN(status));
-    zxlogf(TRACE, "CONNECTSPD: %d ", DSTS_CONNECTSPD(status));
-    if (status & DSTS_DCNRD) zxlogf(TRACE, "DCNRD ");
-    if (status & DSTS_SRE) zxlogf(TRACE, "SRE ");
-    if (status & DSTS_RSS) zxlogf(TRACE, "RSS ");
-    if (status & DSTS_SSS) zxlogf(TRACE, "SSS ");
-    if (status & DSTS_COREIDLE) zxlogf(TRACE, "COREIDLE ");
-    if (status & DSTS_DEVCTRLHLT) zxlogf(TRACE, "DEVCTRLHLT ");
-    if (status & DSTS_RXFIFOEMPTY) zxlogf(TRACE, "RXFIFOEMPTY ");
-    zxlogf(TRACE, "\n");
+    dprintf(SPEW, "DSTS: ");
+    dprintf(SPEW, "USBLNKST: %d ", DSTS_USBLNKST(status));
+    dprintf(SPEW, "SOFFN: %d ", DSTS_SOFFN(status));
+    dprintf(SPEW, "CONNECTSPD: %d ", DSTS_CONNECTSPD(status));
+    if (status & DSTS_DCNRD) dprintf(SPEW, "DCNRD ");
+    if (status & DSTS_SRE) dprintf(SPEW, "SRE ");
+    if (status & DSTS_RSS) dprintf(SPEW, "RSS ");
+    if (status & DSTS_SSS) dprintf(SPEW, "SSS ");
+    if (status & DSTS_COREIDLE) dprintf(SPEW, "COREIDLE ");
+    if (status & DSTS_DEVCTRLHLT) dprintf(SPEW, "DEVCTRLHLT ");
+    if (status & DSTS_RXFIFOEMPTY) dprintf(SPEW, "RXFIFOEMPTY ");
+    dprintf(SPEW, "\n");
 
     status = DWC3_READ32(mmio + GSTS);
-    zxlogf(TRACE, "GSTS: ");
-    zxlogf(TRACE, "CBELT: %d ", GSTS_CBELT(status));
-    zxlogf(TRACE, "CURMOD: %d ", GSTS_CURMOD(status));
-    if (status & GSTS_SSIC_IP) zxlogf(TRACE, "SSIC_IP ");
-    if (status & GSTS_OTG_IP) zxlogf(TRACE, "OTG_IP ");
-    if (status & GSTS_BC_IP) zxlogf(TRACE, "BC_IP ");
-    if (status & GSTS_ADP_IP) zxlogf(TRACE, "ADP_IP ");
-    if (status & GSTS_HOST_IP) zxlogf(TRACE, "HOST_IP ");
-    if (status & GSTS_DEVICE_IP) zxlogf(TRACE, "DEVICE_IP ");
-    if (status & GSTS_CSR_TIMEOUT) zxlogf(TRACE, "CSR_TIMEOUT ");
-    if (status & GSTS_BUSERRADDRVLD) zxlogf(TRACE, "BUSERRADDRVLD ");
-    zxlogf(TRACE, "\n");
+    dprintf(SPEW, "GSTS: ");
+    dprintf(SPEW, "CBELT: %d ", GSTS_CBELT(status));
+    dprintf(SPEW, "CURMOD: %d ", GSTS_CURMOD(status));
+    if (status & GSTS_SSIC_IP) dprintf(SPEW, "SSIC_IP ");
+    if (status & GSTS_OTG_IP) dprintf(SPEW, "OTG_IP ");
+    if (status & GSTS_BC_IP) dprintf(SPEW, "BC_IP ");
+    if (status & GSTS_ADP_IP) dprintf(SPEW, "ADP_IP ");
+    if (status & GSTS_HOST_IP) dprintf(SPEW, "HOST_IP ");
+    if (status & GSTS_DEVICE_IP) dprintf(SPEW, "DEVICE_IP ");
+    if (status & GSTS_CSR_TIMEOUT) dprintf(SPEW, "CSR_TIMEOUT ");
+    if (status & GSTS_BUSERRADDRVLD) dprintf(SPEW, "BUSERRADDRVLD ");
+    dprintf(SPEW, "\n");
 }
 
 static void dwc3_stop(dwc3_t* dwc) {
     volatile void* mmio = dwc3_mmio(dwc);
     uint32_t temp;
 
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
 
     temp = DWC3_READ32(mmio + DCTL);
     temp &= ~DCTL_RUN_STOP;
@@ -73,14 +132,14 @@ static void dwc3_stop(dwc3_t* dwc) {
     DWC3_WRITE32(mmio + DCTL, temp);
     dwc3_wait_bits(mmio + DCTL, DCTL_CSFTRST, 0);
 
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 }
 
 static void dwc3_start_peripheral_mode(dwc3_t* dwc) {
     volatile void* mmio = dwc3_mmio(dwc);
     uint32_t temp;
 
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
 
     // configure and enable PHYs
     temp = DWC3_READ32(mmio + GUSB2PHYCFG(0));
@@ -108,57 +167,62 @@ static void dwc3_start_peripheral_mode(dwc3_t* dwc) {
     DWC3_WRITE32(mmio + DCFG, temp);
 
     dwc3_events_start(dwc);
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 
     dwc3_ep0_start(dwc);
 
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
 
     // start the controller
     DWC3_WRITE32(mmio + DCTL, DCTL_RUN_STOP);
 
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 }
 
 static void dwc3_start_host_mode(dwc3_t* dwc) {
     volatile void* mmio = dwc3_mmio(dwc);
 
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
 
     // configure for host mode
     DWC3_WRITE32(mmio + GCTL, GCTL_U2EXIT_LFPS | GCTL_PRTCAPDIR_HOST | GCTL_U2RSTECN |
                               GCTL_PWRDNSCALE(2));
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 
 }
 
 void dwc3_usb_reset(dwc3_t* dwc) {
-    zxlogf(INFO, "dwc3_usb_reset\n");
+    dprintf(INFO, "dwc3_usb_reset\n");
 
     dwc3_ep0_reset(dwc);
 
     for (unsigned i = 2; i < countof(dwc->eps); i++) {
-        dwc3_ep_end_transfers(dwc, i, ZX_ERR_IO_NOT_PRESENT);
+        dwc3_ep_end_transfers(dwc, i, ERR_OFFLINE);
         dwc3_ep_set_stall(dwc, i, false);
     }
 
     dwc3_set_address(dwc, 0);
     dwc3_ep0_start(dwc);
-    usb_dci_set_connected(&dwc->dci_intf, true);
+
+    usbc_callback(USB_CB_RESET, NULL);
+//    usb_dci_set_connected(&dwc->dci_intf, true);
 }
 
 void dwc3_disconnected(dwc3_t* dwc) {
-    zxlogf(INFO, "dwc3_disconnected\n");
+    dprintf(INFO, "dwc3_disconnected\n");
 
     dwc3_cmd_ep_end_transfer(dwc, EP0_OUT);
     dwc->ep0_state = EP0_STATE_NONE;
 
-    if (dwc->dci_intf.ops) {
-        usb_dci_set_connected(&dwc->dci_intf, false);
-    }
+// is this right?
+    usbc_callback(USB_CB_ONLINE, NULL);
+
+//    if (dwc->dci_intf.ops) {
+//        usb_dci_set_connected(&dwc->dci_intf, false);
+//    }
 
     for (unsigned i = 2; i < countof(dwc->eps); i++) {
-        dwc3_ep_end_transfers(dwc, i, ZX_ERR_IO_NOT_PRESENT);
+        dwc3_ep_end_transfers(dwc, i, ERR_OFFLINE);
         dwc3_ep_set_stall(dwc, i, false);
     }
 }
@@ -166,7 +230,7 @@ void dwc3_disconnected(dwc3_t* dwc) {
 void dwc3_connection_done(dwc3_t* dwc) {
     volatile void* mmio = dwc3_mmio(dwc);
 
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
     uint32_t status = DWC3_READ32(mmio + DSTS);
     uint32_t speed = DSTS_CONNECTSPD(status);
     unsigned ep0_max_packet = 0;
@@ -186,12 +250,12 @@ void dwc3_connection_done(dwc3_t* dwc) {
         ep0_max_packet = 512;
         break;
     default:
-        zxlogf(ERROR, "dwc3_connection_done: unsupported speed %u\n", speed);
+        dprintf(ALWAYS, "dwc3_connection_done: unsupported speed %u\n", speed);
         dwc->speed = USB_SPEED_UNDEFINED;
         break;
     }
 
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 
     if (ep0_max_packet) {
         dwc->eps[EP0_OUT].max_packet_size = ep0_max_packet;
@@ -200,78 +264,71 @@ void dwc3_connection_done(dwc3_t* dwc) {
         dwc3_cmd_ep_set_config(dwc, EP0_IN, USB_ENDPOINT_CONTROL, ep0_max_packet, 0, true);
     }
 
-    usb_dci_set_speed(&dwc->dci_intf, dwc->speed);
+//    usb_dci_set_speed(&dwc->dci_intf, dwc->speed);
 }
 
 void dwc3_set_address(dwc3_t* dwc, unsigned address) {
     volatile void* mmio = dwc3_mmio(dwc);
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
     DWC3_SET_BITS32(mmio + DCFG, DCFG_DEVADDR_START, DCFG_DEVADDR_BITS, address);
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 }
 
 void dwc3_reset_configuration(dwc3_t* dwc) {
     volatile void* mmio = dwc3_mmio(dwc);
 
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
 
     // disable all endpoints except EP0_OUT and EP0_IN
     DWC3_WRITE32(mmio + DALEPENA, (1 << EP0_OUT) | (1 << EP0_IN));
 
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 
     for (unsigned i = 2; i < countof(dwc->eps); i++) {
-        dwc3_ep_end_transfers(dwc, i, ZX_ERR_IO_NOT_PRESENT);
+        dwc3_ep_end_transfers(dwc, i, ERR_OFFLINE);
         dwc3_ep_set_stall(dwc, i, false);
     }
 }
 
+/*
 static void dwc3_request_queue(void* ctx, usb_request_t* req) {
     dwc3_t* dwc = ctx;
 
-    zxlogf(LTRACE, "dwc3_request_queue ep: %u\n", req->header.ep_address);
+    dprintf(SPEW, "dwc3_request_queue ep: %u\n", req->header.ep_address);
     unsigned ep_num = dwc3_ep_num(req->header.ep_address);
     if (ep_num < 2 || ep_num >= countof(dwc->eps)) {
-        zxlogf(ERROR, "dwc3_request_queue: bad ep address 0x%02X\n", req->header.ep_address);
-        usb_request_complete(req, ZX_ERR_INVALID_ARGS, 0);
+        dprintf(ALWAYS, "dwc3_request_queue: bad ep address 0x%02X\n", req->header.ep_address);
+        usb_request_complete(req, ERR_INVALID_ARGS, 0);
         return;
     }
 
     dwc3_ep_queue(dwc, ep_num, req);
 }
 
-static zx_status_t dwc3_set_interface(void* ctx, usb_dci_interface_t* dci_intf) {
-    dwc3_t* dwc = ctx;
-    memcpy(&dwc->dci_intf, dci_intf, sizeof(dwc->dci_intf));
-    return NO_ERROR;
-}
-
-static zx_status_t dwc3_config_ep(void* ctx, usb_endpoint_descriptor_t* ep_desc,
+static status_t dwc3_config_ep(void* ctx, usb_endpoint_descriptor_t* ep_desc,
                                   usb_ss_ep_comp_descriptor_t* ss_comp_desc) {
     dwc3_t* dwc = ctx;
     return dwc3_ep_config(dwc, ep_desc, ss_comp_desc);
 }
 
-static zx_status_t dwc3_disable_ep(void* ctx, uint8_t ep_addr) {
+static status_t dwc3_disable_ep(void* ctx, uint8_t ep_addr) {
     dwc3_t* dwc = ctx;
     return dwc3_ep_disable(dwc, ep_addr);
 }
 
-static zx_status_t dwc3_set_stall(void* ctx, uint8_t ep_address) {
+static status_t dwc3_set_stall(void* ctx, uint8_t ep_address) {
     dwc3_t* dwc = ctx;
     return dwc3_ep_set_stall(dwc, dwc3_ep_num(ep_address), true);
 }
 
-static zx_status_t dwc3_clear_stall(void* ctx, uint8_t ep_address) {
+static status_t dwc3_clear_stall(void* ctx, uint8_t ep_address) {
     dwc3_t* dwc = ctx;
     return dwc3_ep_set_stall(dwc, dwc3_ep_num(ep_address), false);
 }
 
-
-/*
-static zx_status_t dwc3_set_mode(void* ctx, usb_mode_t mode) {
+static status_t dwc3_set_mode(void* ctx, usb_mode_t mode) {
     dwc3_t* dwc = ctx;
-    zx_status_t status = NO_ERROR;
+    status_t status = NO_ERROR;
 
     if (mode == USB_MODE_OTG) {
         return ZX_ERR_NOT_SUPPORTED;
@@ -301,7 +358,7 @@ static zx_status_t dwc3_set_mode(void* ctx, usb_mode_t mode) {
     if (mode == USB_MODE_DEVICE) {
         status = pdev_map_interrupt(&dwc->pdev, IRQ_USB3, &dwc->irq_handle);
         if (status != NO_ERROR) {
-            zxlogf(ERROR, "dwc3_set_mode: pdev_map_interrupt failed\n");
+            dprintf(ALWAYS, "dwc3_set_mode: pdev_map_interrupt failed\n");
             goto fail;
         }
 
@@ -318,88 +375,48 @@ fail:
     return status;
 }
 
-static zx_status_t dwc3_bind(void* ctx, zx_device_t* parent) {
-    zxlogf(INFO, "dwc3_bind\n");
+*/
+
+static void dwc3_init(uint level) {
+    dprintf(INFO, "dwc3_bind\n");
 
     dwc3_t* dwc = calloc(1, sizeof(dwc3_t));
     if (!dwc) {
-        return ZX_ERR_NO_MEMORY;
+        return;
     }
 
-    zx_status_t status = device_get_protocol(parent, ZX_PROTOCOL_PLATFORM_DEV, &dwc->pdev);
-    if (status != NO_ERROR) {
-        goto fail;
-    }
-
-    status = device_get_protocol(parent, ZX_PROTOCOL_USB_MODE_SWITCH, &dwc->ums);
-    if (status != NO_ERROR) {
-        goto fail;
-    }
-
-    mtx_init(&dwc->lock, mtx_plain);
-
-    status = pdev_get_bti(&dwc->pdev, 0, &dwc->bti_handle);
-    if (status != NO_ERROR) {
-        goto fail;
-    }
+    mutex_init(&dwc->lock);
 
     for (unsigned i = 0; i < countof(dwc->eps); i++) {
         dwc3_endpoint_t* ep = &dwc->eps[i];
         ep->ep_num = i;
-        mtx_init(&ep->lock, mtx_plain);
+        mutex_init(&ep->lock);
         list_initialize(&ep->queued_reqs);
     }
-    dwc->parent = parent;
-    dwc->usb_mode = USB_MODE_NONE;
 
-    status = pdev_map_mmio_buffer(&dwc->pdev, MMIO_USB3OTG, ZX_CACHE_POLICY_UNCACHED_DEVICE,
-                                  &dwc->mmio);
+    status_t status = io_buffer_init_physical(&dwc->mmio, DWC3_REG_BASE, DWC3_REG_LENGTH);
     if (status != NO_ERROR) {
-        zxlogf(ERROR, "dwc3_bind: pdev_map_mmio_buffer failed\n");
-        goto fail;
+        dprintf(ALWAYS, "dwc3_bind: io_buffer_init_physical failed\n");
+        return;
     }
 
-    status = pdev_map_contig_buffer(&dwc->pdev, EVENT_BUFFER_SIZE, 0, ZX_VM_FLAG_PERM_READ,
-                                    ZX_CACHE_POLICY_CACHED, &dwc->event_buffer);
+    status = io_buffer_init(&dwc->event_buffer, EVENT_BUFFER_SIZE);
     if (status != NO_ERROR) {
-        zxlogf(ERROR, "dwc3_bind: pdev_map_contig_buffer failed\n");
-        goto fail;
+        dprintf(ALWAYS, "dwc3_bind: io_buffer_init failed\n");
+        return;
     }
-    pdev_vmo_buffer_cache_flush(&dwc->event_buffer, 0, EVENT_BUFFER_SIZE);
 
-    status = pdev_map_contig_buffer(&dwc->pdev, 65536, 0,
-                                    ZX_VM_FLAG_PERM_READ | ZX_VM_FLAG_PERM_WRITE,
-                                    ZX_CACHE_POLICY_CACHED, &dwc->ep0_buffer);
+    status = io_buffer_init(&dwc->ep0_buffer, 65536);
     if (status != NO_ERROR) {
-        zxlogf(ERROR, "dwc3_bind: pdev_map_contig_buffer failed\n");
-        goto fail;
+        dprintf(ALWAYS, "dwc3_bind: io_buffer_init failed\n");
+        return;
     }
 
     status = dwc3_ep0_init(dwc);
     if (status != NO_ERROR) {
-        zxlogf(ERROR, "dwc3_bind: dwc3_ep_init failed\n");
-        goto fail;
+        dprintf(ALWAYS, "dwc3_bind: dwc3_ep_init failed\n");
+        return;
     }
-
-    device_add_args_t args = {
-        .version = DEVICE_ADD_ARGS_VERSION,
-        .name = "dwc3",
-        .ctx = dwc,
-        .ops = &dwc3_device_proto,
-        .proto_id = ZX_PROTOCOL_USB_DCI,
-        .proto_ops = &dwc_dci_protocol,
-    };
-
-    status = device_add(parent, &args, &dwc->zxdev);
-    if (status != NO_ERROR) {
-        goto fail;
-    }
-
-    return NO_ERROR;
-
-fail:
-    zxlogf(ERROR, "dwc3_bind failed %d\n", status);
-    dwc3_release(dwc);
-    return status;
 }
-*/
+
+LK_INIT_HOOK(dwc3, dwc3_init, LK_INIT_LEVEL_THREADING);

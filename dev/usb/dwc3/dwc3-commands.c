@@ -11,7 +11,7 @@ static void dwc3_ep_cmd(dwc3_t* dwc, unsigned ep_num, uint32_t command, uint32_t
                         uint32_t param1, uint32_t param2, uint32_t flags) {
     volatile void* mmio = dwc3_mmio(dwc);
 
-    mtx_lock(&dwc->lock);
+    mutex_acquire(&dwc->lock);
 
     DWC3_WRITE32(mmio + DEPCMDPAR0(ep_num), param0);
     DWC3_WRITE32(mmio + DEPCMDPAR1(ep_num), param1);
@@ -24,7 +24,7 @@ static void dwc3_ep_cmd(dwc3_t* dwc, unsigned ep_num, uint32_t command, uint32_t
     if ((flags & DEPCMD_CMDIOC) == 0) {
         dwc3_wait_bits(depcmd, DEPCMD_CMDACT, 0);
     }
-    mtx_unlock(&dwc->lock);
+    mutex_release(&dwc->lock);
 }
 
 void dwc3_cmd_start_new_config(dwc3_t* dwc, unsigned ep_num, unsigned rsrc_id) {
@@ -51,7 +51,7 @@ void dwc3_cmd_ep_transfer_config(dwc3_t* dwc, unsigned ep_num) {
     dwc3_ep_cmd(dwc, ep_num, DEPXFERCFG, 1, 0, 0, 0);
 }
 
-void dwc3_cmd_ep_start_transfer(dwc3_t* dwc, unsigned ep_num, zx_paddr_t trb_phys) {
+void dwc3_cmd_ep_start_transfer(dwc3_t* dwc, unsigned ep_num, paddr_t trb_phys) {
     dwc3_ep_cmd(dwc, ep_num, DEPSTRTXFER, (uint32_t)(trb_phys >> 32),
                 (uint32_t)trb_phys, 0, DEPCMD_CMDIOC);
 }

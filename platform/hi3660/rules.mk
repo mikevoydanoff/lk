@@ -6,6 +6,7 @@ MODULE_DEPS += \
     lib/cbuf \
     dev/interrupt/arm_gic \
     dev/timer/arm_generic \
+    dev/usb \
     dev/usb/dwc3 \
 
 MODULE_SRCS += \
