@@ -8,6 +8,7 @@ MODULE_DEPS += \
     dev/timer/arm_generic \
     dev/usb \
     dev/usb/dwc3 \
+    app/cdcserialtest \
 
 MODULE_SRCS += \
 	$(LOCAL_DIR)/platform.c \

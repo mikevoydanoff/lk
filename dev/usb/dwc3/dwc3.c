@@ -53,6 +53,22 @@ status_t io_buffer_init_physical(io_buffer_t* buffer, paddr_t paddr, size_t size
     return NO_ERROR;
 }
 
+status_t usbc_setup_endpoint(ep_t ep, ep_dir_t dir, uint width, ep_type_t type) {
+    return NO_ERROR;
+}
+
+status_t usbc_queue_rx(ep_t ep, usbc_transfer_t *transfer) {
+    return NO_ERROR;
+}
+
+status_t usbc_queue_tx(ep_t ep, usbc_transfer_t *transfer) {
+    return NO_ERROR;
+}
+
+status_t usbc_flush_ep(ep_t ep) {
+    return NO_ERROR;
+}
+
 status_t usbc_set_active(bool active) {
     return NO_ERROR;
 }

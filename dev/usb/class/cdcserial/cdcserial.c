@@ -60,7 +60,7 @@
 
 static uint8_t ctrl_if_descriptor[] = {
     0x09,           /* length */
-    INTERFACE,      /* type */
+    USB_DT_INTERFACE,      /* type */
     0x00,           /* interface num */
     0x00,           /* alternates */
     0x01,           /* endpoint count */
@@ -71,7 +71,7 @@ static uint8_t ctrl_if_descriptor[] = {
 
     /* endpoint 1 IN */
     0x07,           /* length */
-    ENDPOINT,       /* type */
+    USB_DT_ENDPOINT,       /* type */
     0x80,           /* address: 1 IN */
     0x03,           /* type: bulk */
     W(8),           /* max packet size: 8 */
@@ -101,7 +101,7 @@ static uint8_t ctrl_if_descriptor[] = {
 static uint8_t data_if_descriptor[] = {
     /*Data class interface descriptor*/
     0x09,       /* bLength: Endpoint Descriptor size */
-    INTERFACE,  /* bDescriptorType: */
+    USB_DT_INTERFACE,  /* bDescriptorType: */
     0x01,       /* bInterfaceNumber: Number of Interface */
     0x00,       /* bAlternateSetting: Alternate setting */
     0x02,       /* bNumEndpoints: Two endpoints used */
@@ -112,7 +112,7 @@ static uint8_t data_if_descriptor[] = {
 
     /*Endpoint OUT Descriptor*/
     0x07,      /* bLength: Endpoint Descriptor size */
-    ENDPOINT,  /* bDescriptorType: Endpoint */
+    USB_DT_ENDPOINT,  /* bDescriptorType: Endpoint */
     0x00,      /* bEndpointAddress */
     0x02,      /* bmAttributes: Bulk */
     0x40,      /* wMaxPacketSize: */
@@ -121,7 +121,7 @@ static uint8_t data_if_descriptor[] = {
 
     /*Endpoint IN Descriptor*/
     0x07,      /* bLength: Endpoint Descriptor size */
-    ENDPOINT,  /* bDescriptorType: Endpoint */
+    USB_DT_ENDPOINT,  /* bDescriptorType: Endpoint */
     0x80,      /* bEndpointAddress */
     0x02,      /* bmAttributes: Bulk */
     0x40,      /* wMaxPacketSize: */
@@ -161,20 +161,20 @@ static status_t usb_register_cb(
         // NB: The host might send us some modem commands here. Since we're not a
         // real modem, we're probably okay to drop them on the floor and reply with
         // an acknowledgement.
-        if (setup->length) {  // Has data phase?
-            if (setup->request_type & 0x80) {
+        if (setup->wLength) {  // Has data phase?
+            if (setup->bmRequestType & 0x80) {
                 // We have to send data?
-                usbc_ep0_send(buf, setup->length, 64);
+                usbc_ep0_send(buf, setup->wLength, 64);
             } else {
-                usbc_ep0_recv(buf, setup->length, NULL);
+                usbc_ep0_recv(buf, setup->wLength, NULL);
                 usbc_ep0_ack();
             }
         } else {
-            switch (setup->request) {
+            switch (setup->bRequest) {
                 case CDC_REQ_SET_CONTROL_LINE_STATE:
                     usbc_ep0_ack();
                     if (chan->online_cb) {
-                        chan->online_cb(chan, setup->value & 0x1);
+                        chan->online_cb(chan, setup->wValue & 0x1);
                     }
                     break;
                 case CDC_REQ_SEND_CMD:
