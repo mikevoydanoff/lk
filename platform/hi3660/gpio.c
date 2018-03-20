@@ -4,7 +4,7 @@
 
 #include <dev/gpio.h>
 #include <kernel/vm.h>
-#include <platform/hi3660.h>
+#include <platform/hi3660-hw.h>
 
 #include <assert.h>
 #include <err.h>
@@ -31,75 +31,43 @@ typedef struct {
     size_t      length;
     uint32_t    start_pin;
     uint32_t    pin_count;
-    const uint32_t* irqs;
-    uint32_t    irq_count;
 } gpio_block_t;
-
-static const uint32_t irqs_0[] = {
-    116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133,
-};
-
-static const uint32_t irqs_18[] = {
-    134, 135,
-};
-
-static const uint32_t irqs_20[] = {
-    136, 137,
-};
-
-static const uint32_t irqs_22[] = {
-    138, 139, 140, 141, 142, 143,
-};
-
-static const uint32_t irqs_28[] = {
-    173,
-};
 
 static const gpio_block_t gpio_blocks[] = {
     {
         // GPIO groups 0 - 17
-        .base = GPIO_0_ADDR,
+        .base = MMIO_GPIO0_BASE,
         .length = 18 * 4096,
         .start_pin = 0,
         .pin_count = 18 * 8,
-        .irqs = irqs_0,
-        .irq_count = countof(irqs_0),
     },
     {
         // GPIO groups 18 and 19
-        .base = GPIO_18_ADDR,
+        .base = MMIO_GPIO18_BASE,
         .length = 2 * 4096,
         .start_pin = 18 * 8,
         .pin_count = 2 * 8,
-        .irqs = irqs_18,
-        .irq_count = countof(irqs_18),
     },
     {
         // GPIO groups 20 and 21
-        .base = GPIO_20_ADDR,
+        .base = MMIO_GPIO20_BASE,
         .length = 2 * 4096,
         .start_pin = 20 * 8,
         .pin_count = 2 * 8,
-        .irqs = irqs_20,
-        .irq_count = countof(irqs_20),
     },
     {
         // GPIO groups 22 - 27
-        .base = GPIO_22_ADDR,
+        .base = MMIO_GPIO22_BASE,
         .length = 6 * 4096,
         .start_pin = 22 * 8,
         .pin_count = 6 * 8,
-        .irqs = irqs_22,
-        .irq_count = countof(irqs_22),
     },
     {
         // GPIO group 28
-        .base = GPIO_28_ADDR,
+        .base = MMIO_GPIO28_BASE,
         .length = 1 * 4096,
         .start_pin = 28 * 8,
         .pin_count = 1 * 8,
-        .irqs = irqs_28,
-        .irq_count = countof(irqs_28),
     },
 };
 

@@ -34,10 +34,3 @@
 #define GIC_BASE                        (HI3660_PERIPH_VIRT_OFFSET + 0xe82b0000)
 
 #define UART0_IRQ                       111
-
-// Addresses for GPIO regions
-#define GPIO_0_ADDR     0xe8a0b000
-#define GPIO_18_ADDR    0xff3b4000
-#define GPIO_20_ADDR    0xe8a1f000
-#define GPIO_22_ADDR    0xfff0b000
-#define GPIO_28_ADDR    0xfff1d000

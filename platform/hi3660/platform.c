@@ -37,8 +37,9 @@
 #include <platform.h>
 #include <dev/interrupt/arm_gic.h>
 #include <dev/timer/arm_generic.h>
-#include <platform/hi3660.h>
 #include <dev/uart.h>
+#include <platform/hi3660.h>
+#include <platform/usb.h>
 
 typedef struct arm64_iframe_long arm_platform_iframe_t;
 
@@ -92,6 +93,7 @@ int platform_dgetc(char *c, bool wait)
 void platform_init(void)
 {
     uart_init();
+    hi3660_usb_init();
 }
 
 void platform_early_init(void)

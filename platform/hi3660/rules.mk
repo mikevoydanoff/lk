@@ -14,6 +14,7 @@ MODULE_SRCS += \
 	$(LOCAL_DIR)/platform.c \
 	$(LOCAL_DIR)/gpio.c \
 	$(LOCAL_DIR)/uart.c \
+	$(LOCAL_DIR)/usb.c \
 
 ARCH := arm64
 ARM_CPU := cortex-a53
