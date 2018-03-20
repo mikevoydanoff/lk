@@ -37,6 +37,7 @@
 #include <platform.h>
 #include <dev/interrupt/arm_gic.h>
 #include <dev/timer/arm_generic.h>
+#include <dev/usb/dwc3/dwc3.h>
 #include <dev/uart.h>
 #include <platform/hi3660.h>
 #include <platform/usb.h>
@@ -94,6 +95,7 @@ void platform_init(void)
 {
     uart_init();
     hi3660_usb_init();
+    usb_dwc3_init();
 }
 
 void platform_early_init(void)

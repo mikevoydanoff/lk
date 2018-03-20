@@ -19,15 +19,7 @@
 #include "dwc3-regs.h"
 #include "dwc3-types.h"
 
-// MMIO indices
-enum {
-    MMIO_USB3OTG,
-};
-
-// IRQ indices
-enum {
-    IRQ_USB3,
-};
+static dwc3_t* s_dwc = NULL;
 
 status_t io_buffer_init(io_buffer_t* buffer, size_t size) {
     void* addr;
@@ -53,56 +45,11 @@ status_t io_buffer_init_physical(io_buffer_t* buffer, paddr_t paddr, size_t size
     return NO_ERROR;
 }
 
-status_t usbc_setup_endpoint(ep_t ep, ep_dir_t dir, uint width, ep_type_t type) {
-    return NO_ERROR;
-}
-
-status_t usbc_queue_rx(ep_t ep, usbc_transfer_t *transfer) {
-    return NO_ERROR;
-}
-
-status_t usbc_queue_tx(ep_t ep, usbc_transfer_t *transfer) {
-    return NO_ERROR;
-}
-
-status_t usbc_flush_ep(ep_t ep) {
-    return NO_ERROR;
-}
-
-status_t usbc_set_active(bool active) {
-    return NO_ERROR;
-}
-
-void usbc_set_address(uint8_t address) {
-printf("usbc_set_address %u\n", address);
-}
-
-void usbc_ep0_ack(void) {
-printf("usbc_ep0_ack\n");
-}
-
-void usbc_ep0_stall(void) {
-printf("usbc_ep0_stall\n");
-}
-
-void usbc_ep0_send(const void *buf, size_t len, size_t maxlen) {
-printf("usbc_ep0_send\n");
-}
-
-void usbc_ep0_recv(void *buf, size_t len, ep_callback cb) {
-printf("usbc_ep0_recv\n");
-}
-
-bool usbc_is_highspeed(void) {
-    return true;
-}
-
 void dwc3_wait_bits(volatile uint32_t* ptr, uint32_t bits, uint32_t expected) {
-    uint32_t value = DWC3_READ32(ptr);
-    while ((value & bits) != expected) {
-        thread_sleep(1);
+    uint32_t value;
+    do {
         value = DWC3_READ32(ptr);
-    }
+    } while ((value & bits) != expected);
 }
 
 void dwc3_print_status(dwc3_t* dwc) {
@@ -393,8 +340,64 @@ fail:
 
 */
 
-static void dwc3_init(uint level) {
-    dprintf(INFO, "dwc3_bind\n");
+status_t usbc_setup_endpoint(ep_t ep, ep_dir_t dir, uint width, ep_type_t type) {
+printf("usbc_setup_endpoint %u\n", ep);
+    return NO_ERROR;
+}
+
+status_t usbc_queue_rx(ep_t ep, usbc_transfer_t *transfer) {
+printf("usbc_queue_rx\n");
+    return NO_ERROR;
+}
+
+status_t usbc_queue_tx(ep_t ep, usbc_transfer_t *transfer) {
+printf("usbc_queue_txn");
+    return NO_ERROR;
+}
+
+status_t usbc_flush_ep(ep_t ep) {
+printf("usbc_flush_ep %u\n", ep);
+    return NO_ERROR;
+}
+
+status_t usbc_set_active(bool active) {
+printf("usbc_set_active %d\n", active);
+
+    if (active) {
+        dwc3_start_peripheral_mode(s_dwc);
+    } else {
+        dwc3_stop(s_dwc);
+    }
+    return NO_ERROR;
+}
+
+void usbc_set_address(uint8_t address) {
+printf("usbc_set_address %u\n", address);
+}
+
+void usbc_ep0_ack(void) {
+printf("usbc_ep0_ack\n");
+}
+
+void usbc_ep0_stall(void) {
+printf("usbc_ep0_stall\n");
+}
+
+void usbc_ep0_send(const void *buf, size_t len, size_t maxlen) {
+printf("usbc_ep0_send\n");
+}
+
+void usbc_ep0_recv(void *buf, size_t len, ep_callback cb) {
+printf("usbc_ep0_recv\n");
+}
+
+bool usbc_is_highspeed(void) {
+    return true;
+}
+
+
+void usb_dwc3_init(void) {
+    dprintf(INFO, "dwc3_init\n");
 
     dwc3_t* dwc = calloc(1, sizeof(dwc3_t));
     if (!dwc) {
@@ -433,6 +436,6 @@ static void dwc3_init(uint level) {
         dprintf(ALWAYS, "dwc3_bind: dwc3_ep_init failed\n");
         return;
     }
-}
 
-LK_INIT_HOOK(dwc3, dwc3_init, LK_INIT_LEVEL_THREADING);
+    s_dwc = dwc;
+}
