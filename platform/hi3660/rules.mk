@@ -12,6 +12,7 @@ MODULE_DEPS += \
 
 MODULE_SRCS += \
 	$(LOCAL_DIR)/platform.c \
+	$(LOCAL_DIR)/gpio.c \
 	$(LOCAL_DIR)/uart.c \
 
 ARCH := arm64
