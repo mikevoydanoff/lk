@@ -5,6 +5,7 @@
 #pragma once
 
 #include <list.h>
+#include <dev/usbc.h>
 #include <hw/usb.h>
 #include <kernel/mutex.h>
 
@@ -31,6 +32,7 @@ status_t io_buffer_init(io_buffer_t* buffer, size_t size);
 #define EP_IN(ep_num)       (((ep_num) & 1) == 1)
 
 #define EVENT_BUFFER_SIZE   PAGE_SIZE
+#define EP0_BUFFER_SIZE     65536
 #define EP0_MAX_PACKET_SIZE 512
 #define DWC3_MAX_EPS    32
 
@@ -39,7 +41,8 @@ status_t io_buffer_init(io_buffer_t* buffer, size_t size);
 
 typedef enum {
     EP0_STATE_NONE,
-    EP0_STATE_SETUP,            // Queued setup phase
+    EP0_STATE_SETUP_QUEUED,     // Queued setup phase
+    EP0_STATE_SETUP_RECEIVED,   // Received setup phase
     EP0_STATE_DATA_OUT,         // Queued data on EP0_OUT
     EP0_STATE_DATA_IN,          // Queued data on EP0_IN
     EP0_STATE_WAIT_NRDY_OUT,    // Waiting for not-ready on EP0_OUT
@@ -93,6 +96,7 @@ typedef struct {
     usb_setup_t cur_setup;      // current setup request
     io_buffer_t ep0_buffer;
     dwc3_ep0_state ep0_state;
+    ep_callback ep0_cb;
 
     // Used for synchronizing global state
     // and non ep specific hardware registers.
@@ -145,7 +149,10 @@ void dwc3_ep0_reset(dwc3_t* dwc);
 void dwc3_ep0_start(dwc3_t* dwc);
 void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage);
 void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num);
-
+void dwc3_ep0_send(dwc3_t* dwc, const void *buf, size_t len, size_t maxlen);
+void dwc3_ep0_recv(dwc3_t* dwc, void *buf, size_t len, ep_callback cb);
+void dwc3_ep0_ack(dwc3_t* dwc);
+void dwc3_ep0_stall(dwc3_t* dwc);
 
 // Events
 void dwc3_events_start(dwc3_t* dwc);

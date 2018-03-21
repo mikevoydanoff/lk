@@ -14,6 +14,8 @@ static void dwc3_handle_ep_event(dwc3_t* dwc, uint32_t event) {
     uint32_t ep_num = DEPEVT_PHYS_EP(event);
     uint32_t status = DEPEVT_STATUS(event);
 
+    dprintf(SPEW, "dwc3_handle_ep_event type %u ep_num %u status %u\n", type, ep_num, status);
+
     switch (type) {
     case DEPEVT_XFER_COMPLETE:
         dwc3_ep_xfer_complete(dwc, ep_num);
@@ -176,7 +178,7 @@ static enum handler_return dwc3_irq_handler(void* arg) {
     dwc3_t* dwc = arg;
     volatile void* mmio = dwc3_mmio(dwc);
 
-    dprintf(SPEW, "dwc3_irq_handler\n");
+//    dprintf(SPEW, "dwc3_irq_handler\n");
 
     uint32_t* ring_start = (uint32_t *)dwc->event_buffer.vaddr;
     uint32_t* ring_end = (void *)ring_start + EVENT_BUFFER_SIZE;

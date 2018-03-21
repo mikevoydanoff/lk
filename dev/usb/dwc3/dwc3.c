@@ -5,7 +5,6 @@
 #include <err.h>
 #include <reg.h>
 #include <dev/usb.h>
-#include <dev/usbc.h>
 #include <kernel/vm.h>
 #include <lk/init.h>
 
@@ -342,7 +341,13 @@ fail:
 
 status_t usbc_setup_endpoint(ep_t ep, ep_dir_t dir, uint width, ep_type_t type) {
 printf("usbc_setup_endpoint %u\n", ep);
-    return NO_ERROR;
+    usb_endpoint_descriptor_t ep_desc;
+    ep_desc.bLength = sizeof(ep_desc);
+    ep_desc.bDescriptorType = USB_DT_ENDPOINT;
+    ep_desc.bEndpointAddress = ep | (dir == USB_IN ? USB_DIR_IN : USB_DIR_OUT);
+    ep_desc.wMaxPacketSize = width;
+    
+    return dwc3_ep_config(s_dwc, &ep_desc, NULL);
 }
 
 status_t usbc_queue_rx(ep_t ep, usbc_transfer_t *transfer) {
@@ -362,7 +367,6 @@ printf("usbc_flush_ep %u\n", ep);
 
 status_t usbc_set_active(bool active) {
 printf("usbc_set_active %d\n", active);
-
     if (active) {
         dwc3_start_peripheral_mode(s_dwc);
     } else {
@@ -373,22 +377,23 @@ printf("usbc_set_active %d\n", active);
 
 void usbc_set_address(uint8_t address) {
 printf("usbc_set_address %u\n", address);
+    dwc3_set_address(s_dwc, address);
 }
 
 void usbc_ep0_ack(void) {
-printf("usbc_ep0_ack\n");
+    dwc3_ep0_ack(s_dwc);
 }
 
 void usbc_ep0_stall(void) {
-printf("usbc_ep0_stall\n");
+    dwc3_ep0_stall(s_dwc);
 }
 
 void usbc_ep0_send(const void *buf, size_t len, size_t maxlen) {
-printf("usbc_ep0_send\n");
+    dwc3_ep0_send(s_dwc, buf, len, maxlen);
 }
 
 void usbc_ep0_recv(void *buf, size_t len, ep_callback cb) {
-printf("usbc_ep0_recv\n");
+    dwc3_ep0_recv(s_dwc, buf, len, cb);
 }
 
 bool usbc_is_highspeed(void) {
@@ -425,7 +430,7 @@ void usb_dwc3_init(void) {
         return;
     }
 
-    status = io_buffer_init(&dwc->ep0_buffer, 65536);
+    status = io_buffer_init(&dwc->ep0_buffer, EP0_BUFFER_SIZE);
     if (status != NO_ERROR) {
         dprintf(ALWAYS, "dwc3_bind: io_buffer_init failed\n");
         return;

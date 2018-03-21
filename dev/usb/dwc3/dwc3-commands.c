@@ -28,11 +28,13 @@ static void dwc3_ep_cmd(dwc3_t* dwc, unsigned ep_num, uint32_t command, uint32_t
 }
 
 void dwc3_cmd_start_new_config(dwc3_t* dwc, unsigned ep_num, unsigned rsrc_id) {
+printf("dwc3_cmd_start_new_config\n");
     dwc3_ep_cmd(dwc, ep_num, DEPSTARTCFG | DEPCMD_RESOURCE_INDEX(rsrc_id),  0, 0, 0, 0);
 }
 
 void dwc3_cmd_ep_set_config(dwc3_t* dwc, unsigned ep_num, unsigned ep_type,
                                    unsigned max_packet_size, unsigned interval, bool modify) {
+printf("dwc3_cmd_ep_set_config\n");
     // fifo number is zero for OUT endpoints and EP0_IN
     unsigned fifo_num = (EP_OUT(ep_num) || ep_num == EP0_IN ? 0 : ep_num >> 1);
     uint32_t param0 = DEPCFG_FIFO_NUM(fifo_num) | DEPCFG_MAX_PACKET_SIZE(max_packet_size)
@@ -48,24 +50,29 @@ void dwc3_cmd_ep_set_config(dwc3_t* dwc, unsigned ep_num, unsigned ep_type,
 }
 
 void dwc3_cmd_ep_transfer_config(dwc3_t* dwc, unsigned ep_num) {
+printf("dwc3_cmd_ep_transfer_config\n");
     dwc3_ep_cmd(dwc, ep_num, DEPXFERCFG, 1, 0, 0, 0);
 }
 
 void dwc3_cmd_ep_start_transfer(dwc3_t* dwc, unsigned ep_num, paddr_t trb_phys) {
+printf("dwc3_cmd_ep_start_transfer\n");
     dwc3_ep_cmd(dwc, ep_num, DEPSTRTXFER, (uint32_t)(trb_phys >> 32),
                 (uint32_t)trb_phys, 0, DEPCMD_CMDIOC);
 }
 
 void dwc3_cmd_ep_end_transfer(dwc3_t* dwc, unsigned ep_num) {
+printf("dwc3_cmd_ep_end_transfer\n");
     unsigned rsrc_id = dwc->eps[ep_num].rsrc_id;
     dwc3_ep_cmd(dwc, ep_num, DEPENDXFER, 0, 0, 0,
                 DEPCMD_RESOURCE_INDEX(rsrc_id) | DEPCMD_CMDIOC | DEPCMD_HIPRI_FORCERM);
 }
 
 void dwc3_cmd_ep_set_stall(dwc3_t* dwc, unsigned ep_num) {
+printf("dwc3_cmd_ep_set_stall\n");
     dwc3_ep_cmd(dwc, ep_num, DEPSSTALL, 0, 0, 0, DEPCMD_CMDIOC);
 }
 
 void dwc3_cmd_ep_clear_stall(dwc3_t* dwc, unsigned ep_num) {
+printf("dwc3_cmd_ep_clear_stall\n");
     dwc3_ep_cmd(dwc, ep_num, DEPCSTALL, 0, 0, 0, DEPCMD_CMDIOC);
 }

@@ -6,6 +6,7 @@
 #include "dwc3-regs.h"
 #include "dwc3-types.h"
 
+#include <assert.h>
 #include <err.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,7 +18,7 @@ static void dwc3_queue_setup_locked(dwc3_t* dwc) {
     arch_clean_invalidate_cache_range(dwc->ep0_buffer.vaddr, sizeof(usb_setup_t));
     dwc3_ep_start_transfer(dwc, EP0_OUT, TRB_TRBCTL_SETUP, dwc->ep0_buffer.paddr,
                            sizeof(usb_setup_t));
-    dwc->ep0_state = EP0_STATE_SETUP;
+    dwc->ep0_state = EP0_STATE_SETUP_QUEUED;
 }
 
 status_t dwc3_ep0_init(dwc3_t* dwc) {
@@ -39,6 +40,7 @@ status_t dwc3_ep0_init(dwc3_t* dwc) {
 }
 
 void dwc3_ep0_reset(dwc3_t* dwc) {
+printf("dwc3_ep0_reset\n");
     mutex_acquire(EP0_LOCK(dwc));
     dwc3_cmd_ep_end_transfer(dwc, EP0_OUT);
     dwc->ep0_state = EP0_STATE_NONE;
@@ -55,65 +57,12 @@ void dwc3_ep0_start(dwc3_t* dwc) {
     mutex_release(EP0_LOCK(dwc));
 }
 
-static status_t dwc3_handle_setup(dwc3_t* dwc, usb_setup_t* setup, void* buffer, size_t length,
-                                     size_t* out_actual) {
-    if (setup->bmRequestType == (USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_DEVICE)) {
-        // handle some special setup requests in this driver
-        switch (setup->bRequest) {
-        case USB_REQ_SET_ADDRESS:
-            dprintf(SPEW, "SET_ADDRESS %d\n", setup->wValue);
-            dwc3_set_address(dwc, setup->wValue);
-            *out_actual = 0;
-            return NO_ERROR;
-        case USB_REQ_SET_CONFIGURATION:
-            dprintf(SPEW, "SET_CONFIGURATION %d\n", setup->wValue);
-            dwc3_reset_configuration(dwc);
-            dwc->configured = false;
- 
-            union usb_callback_args args;
-            args.setup = setup;
-            usbc_callback(USB_CB_SETUP_MSG, &args);
-
-//            status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
-//            if (status == NO_ERROR && setup->wValue) {
-                dwc->configured = true;
-                dwc3_start_eps(dwc);
-//            }
-            return NO_ERROR;
-        default:
-            // fall through to usb_dci_control()
-            break;
-        }
-    } else if (setup->bmRequestType == (USB_DIR_OUT | USB_TYPE_STANDARD | USB_RECIP_INTERFACE) &&
-               setup->bRequest == USB_REQ_SET_INTERFACE) {
-        dprintf(SPEW, "SET_INTERFACE %d\n", setup->wValue);
-        dwc3_reset_configuration(dwc);
-        dwc->configured = false;
-
-        union usb_callback_args args;
-        args.setup = setup;
-        usbc_callback(USB_CB_SETUP_MSG, &args);
-
-//        status = usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
-//        if (status == NO_ERROR) {
-            dwc->configured = true;
-            dwc3_start_eps(dwc);
-//        }
-        return NO_ERROR;
-    }
-
-    union usb_callback_args args;
-    args.setup = setup;
-    usbc_callback(USB_CB_SETUP_MSG, &args);
-    return NO_ERROR;
-//    return usb_dci_control(&dwc->dci_intf, setup, buffer, length, out_actual);
-}
-
 void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
     mutex_acquire(EP0_LOCK(dwc));
 
     switch (dwc->ep0_state) {
-    case EP0_STATE_SETUP:
+    case EP0_STATE_SETUP_QUEUED:
+printf("dwc3_ep0_xfer_not_ready EP0_STATE_SETUP_QUEUED\n"); 
         if (stage == DEPEVT_XFER_NOT_READY_STAGE_DATA ||
             stage == DEPEVT_XFER_NOT_READY_STAGE_STATUS) {
             // Stall if we receive xfer not ready data/status while waiting for setup to complete
@@ -122,6 +71,7 @@ void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
         }
         break;
     case EP0_STATE_DATA_OUT:
+printf("dwc3_ep0_xfer_not_ready EP0_STATE_DATA_OUT\n"); 
         if (ep_num == EP0_IN && stage == DEPEVT_XFER_NOT_READY_STAGE_DATA) {
             // end transfer and stall if we receive xfer not ready in the opposite direction
             dwc3_cmd_ep_end_transfer(dwc, EP0_OUT);
@@ -130,6 +80,7 @@ void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
         }
         break;
     case EP0_STATE_DATA_IN:
+printf("dwc3_ep0_xfer_not_ready EP0_STATE_DATA_IN\n"); 
         if (ep_num == EP0_OUT && stage == DEPEVT_XFER_NOT_READY_STAGE_DATA) {
             // end transfer and stall if we receive xfer not ready in the opposite direction
             dwc3_cmd_ep_end_transfer(dwc, EP0_IN);
@@ -138,6 +89,7 @@ void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
         }
         break;
     case EP0_STATE_WAIT_NRDY_OUT:
+printf("dwc3_ep0_xfer_not_ready EP0_STATE_WAIT_NRDY_OUT\n"); 
         if (ep_num == EP0_OUT) {
             if (dwc->cur_setup.wLength > 0) {
                 dwc3_ep_start_transfer(dwc, EP0_OUT, TRB_TRBCTL_STATUS_3, 0, 0);
@@ -148,6 +100,7 @@ void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
         }
         break;
     case EP0_STATE_WAIT_NRDY_IN:
+printf("dwc3_ep0_xfer_not_ready EP0_STATE_WAIT_NRDY_IN\n"); 
         if (ep_num == EP0_IN) {
             if (dwc->cur_setup.wLength > 0) {
                 dwc3_ep_start_transfer(dwc, EP0_IN, TRB_TRBCTL_STATUS_3, 0, 0);
@@ -157,6 +110,10 @@ void dwc3_ep0_xfer_not_ready(dwc3_t* dwc, unsigned ep_num, unsigned stage) {
             dwc->ep0_state = EP0_STATE_STATUS;
         }
         break;
+    case EP0_STATE_STATUS:
+printf("dwc3_ep0_xfer_not_ready EP0_STATE_STATUS\n"); 
+// fall through
+
     default:
         dprintf(ALWAYS, "dwc3_ep0_xfer_not_ready unhandled state %u\n", dwc->ep0_state);
         break;
@@ -169,7 +126,8 @@ void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
     mutex_acquire(EP0_LOCK(dwc));
 
     switch (dwc->ep0_state) {
-    case EP0_STATE_SETUP: {
+    case EP0_STATE_SETUP_QUEUED: {
+printf("dwc3_ep0_xfer_complete EP0_STATE_SETUP_QUEUED\n");
         usb_setup_t* setup = &dwc->cur_setup;
 
         memcpy(setup, (void *)dwc->ep0_buffer.vaddr, sizeof(*setup));
@@ -178,42 +136,22 @@ void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
                 setup->bmRequestType, setup->bRequest, setup->wValue, setup->wIndex,
                 setup->wLength);
 
-        bool is_out = ((setup->bmRequestType & USB_DIR_MASK) == USB_DIR_OUT);
-        if (setup->wLength > 0 && is_out) {
-            // queue a read for the data phase
-            dwc3_ep_start_transfer(dwc, EP0_OUT, TRB_TRBCTL_CONTROL_DATA,
-                                   dwc->ep0_buffer.paddr, setup->wLength);
-            dwc->ep0_state = EP0_STATE_DATA_OUT;
-        } else {
-            size_t actual;
-            status_t status = dwc3_handle_setup(dwc, setup, (void *)dwc->ep0_buffer.vaddr,
-                                                   dwc->ep0_buffer.size, &actual);
-            dprintf(SPEW, "dwc3_handle_setup returned %d actual %zu\n", status, actual);
-            if (status != NO_ERROR) {
-                dwc3_cmd_ep_set_stall(dwc, EP0_OUT);
-                dwc3_queue_setup_locked(dwc);
-                break;
-            }
-
-            if (setup->wLength > 0) {
-                // queue a write for the data phase
-                arch_clean_cache_range(dwc->ep0_buffer.vaddr, actual);
-                dwc3_ep_start_transfer(dwc, EP0_IN, TRB_TRBCTL_CONTROL_DATA, dwc->ep0_buffer.paddr,
-                                       actual);
-                dwc->ep0_state = EP0_STATE_DATA_IN;
-            } else {
-                dwc->ep0_state = EP0_STATE_WAIT_NRDY_IN;
-            }
-       }
+        dwc->ep0_state = EP0_STATE_SETUP_RECEIVED;
+        union usb_callback_args args;
+        args.setup = setup;
+        usbc_callback(USB_CB_SETUP_MSG, &args);
        break;
     }
     case EP0_STATE_DATA_OUT:
+printf("dwc3_ep0_xfer_complete EP0_STATE_DATA_OUT\n");
         dwc->ep0_state = EP0_STATE_WAIT_NRDY_IN;
         break;
     case EP0_STATE_DATA_IN:
+printf("dwc3_ep0_xfer_complete EP0_STATE_DATA_IN\n");
         dwc->ep0_state = EP0_STATE_WAIT_NRDY_OUT;
         break;
     case EP0_STATE_STATUS:
+printf("dwc3_ep0_xfer_complete EP0_STATE_STATUS\n");
         dwc3_queue_setup_locked(dwc);
         break;
     default:
@@ -221,4 +159,36 @@ void dwc3_ep0_xfer_complete(dwc3_t* dwc, unsigned ep_num) {
     }
 
     mutex_release(EP0_LOCK(dwc));
+}
+
+void dwc3_ep0_send(dwc3_t* dwc, const void *buf, size_t len, size_t maxlen) {
+printf("dwc3_ep0_send len %zu maxlen %zu\n", len, maxlen);
+    assert(dwc->ep0_state == EP0_STATE_SETUP_RECEIVED);
+    assert(len <= EP0_BUFFER_SIZE);
+    memcpy((void *)dwc->ep0_buffer.vaddr, buf, len);
+    arch_clean_cache_range(dwc->ep0_buffer.vaddr, len);
+    dwc3_ep_start_transfer(dwc, EP0_IN, TRB_TRBCTL_CONTROL_DATA, dwc->ep0_buffer.paddr, len);
+    dwc->ep0_state = EP0_STATE_DATA_IN;
+}
+
+void dwc3_ep0_recv(dwc3_t* dwc, void *buf, size_t len, ep_callback cb) {
+printf("dwc3_ep0_recv len %zu\n", len);
+    assert(dwc->ep0_state == EP0_STATE_SETUP_RECEIVED);
+    assert(len <= EP0_BUFFER_SIZE);
+    dwc->ep0_cb = cb;
+    dwc3_ep_start_transfer(dwc, EP0_OUT, TRB_TRBCTL_CONTROL_DATA, dwc->ep0_buffer.paddr, len);
+    dwc->ep0_state = EP0_STATE_DATA_OUT;
+}
+
+void dwc3_ep0_ack(dwc3_t* dwc) {
+printf("dwc3_ep0_ack\n");
+    assert(dwc->ep0_state == EP0_STATE_SETUP_RECEIVED);
+    if (dwc->cur_setup.wLength == 0) {
+        dwc->ep0_state = EP0_STATE_WAIT_NRDY_IN;
+    } // else wait for dwc3_ep0_send or dwc3_ep0_recv
+}
+
+void dwc3_ep0_stall(dwc3_t* dwc) {
+printf("dwc3_ep0_stall\n");
+
 }
